@@ -1,0 +1,289 @@
+Exercício Prático 1: Regressão Linear e Ridge Regression
+================
+Emmanuel Magalhães Figueiredo
+27/09/2026
+
+# Seção 1: OLS 1D solução fechada, métricas e visualização
+
+Nesta seção, aplicamos o método de Mínimos Quadrados Ordinários (OLS) e
+avaliamos o desempenho do modelo.
+
+## (a) Cálculo dos Coeficientes OLS
+
+``` r
+# Nome completo: Emmanuel Magalhães Figueiredo
+
+# Carregando os dados
+dados1 <- read.csv("secao1.csv")
+
+# Construindo a matriz X e definindo y
+n <- nrow(dados1)
+X <- cbind(1, dados1$x) 
+y <- as.matrix(dados1$y)
+
+# Solução analítica OLS
+beta_hat <- solve(t(X) %*% X) %*% t(X) %*% y
+
+cat("Intercepto (beta_0):", beta_hat[1], "\n")
+```
+
+    ## Intercepto (beta_0): 2.490985
+
+``` r
+cat("Inclinação (beta_1):", beta_hat[2], "\n")
+```
+
+    ## Inclinação (beta_1): 1.698595
+
+## (b) e (c) Gráficos e Métricas
+
+``` r
+# Calculando predições e resíduos
+y_hat <- X %*% beta_hat
+residuos <- y - y_hat
+
+# Plotando gráficos lado a lado
+par(mfrow=c(1,2))
+plot(dados1$x, dados1$y, main = "Regressão OLS", pch = 19, col = "darkgray", xlab="X", ylab="Y")
+lines(dados1$x, y_hat, col = "blue", lwd = 2)
+hist(residuos, main = "Resíduos", col = "lightblue", xlab="Resíduos")
+```
+
+![](README_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
+``` r
+par(mfrow=c(1,1))
+
+# Calculando Métricas
+mse <- (1/n) * sum(residuos^2)
+mae <- (1/n) * sum(abs(residuos))
+r2 <- 1 - (sum(residuos^2) / sum((y - mean(y))^2))
+
+# Exibindo a tabela de métricas
+data.frame(Metrica = c("MSE", "MAE", "R2"), Valor = c(mse, mae, r2))
+```
+
+    ##   Metrica     Valor
+    ## 1     MSE 1.0154699
+    ## 2     MAE 0.8025008
+    ## 3      R2 0.9547788
+
+# Seção 2: Multicolinearidade e Ridge Regression
+
+Nesta seção, lidamos com dados que possuem forte multicolinearidade,
+avaliando o impacto da penalização $L_2$ (Ridge) na estabilidade dos
+coeficientes.
+
+## (a) Divisão de Dados e Ajuste OLS
+
+``` r
+# Carregando dados da seção 2
+dados2 <- read.csv("secao2.csv")
+
+# Separando treino (70%) e teste (30%)
+set.seed(42) # Mantém a aleatoriedade fixa para reprodutibilidade
+n2 <- nrow(dados2)
+idx_treino <- sample(1:n2, size = round(0.7 * n2))
+
+treino <- dados2[idx_treino, ]
+teste <- dados2[-idx_treino, ]
+
+# Montando as matrizes (agora com duas variáveis x1 e x2, mais o intercepto)
+X_treino <- cbind(1, treino$x1, treino$x2)
+y_treino <- as.matrix(treino$y)
+
+X_teste <- cbind(1, teste$x1, teste$x2)
+y_teste <- as.matrix(teste$y)
+
+# 1. Ajuste OLS padrão
+beta_ols_2 <- solve(t(X_treino) %*% X_treino) %*% t(X_treino) %*% y_treino
+
+# Calculando MSE OLS
+mse_treino_ols <- mean((y_treino - X_treino %*% beta_ols_2)^2)
+mse_teste_ols <- mean((y_teste - X_teste %*% beta_ols_2)^2)
+
+cat("=== Resultados OLS ===\n")
+```
+
+    ## === Resultados OLS ===
+
+``` r
+cat("Coeficientes (beta_0, beta_1, beta_2):", beta_ols_2, "\n")
+```
+
+    ## Coeficientes (beta_0, beta_1, beta_2): 2.856186 0.4047597 1.618162
+
+``` r
+cat("MSE Treino:", mse_treino_ols, "| MSE Teste:", mse_teste_ols, "\n\n")
+```
+
+    ## MSE Treino: 1.166602 | MSE Teste: 0.7492692
+
+## (b) Ridge Regression e Caminho dos Coeficientes
+
+``` r
+# Valores de lambda exigidos
+lambdas <- c(0, 1e-3, 1e-2, 1e-1)
+
+# Matriz Identidade 3x3 (Intercepto + x1 + x2)
+I <- diag(3)
+I[1, 1] <- 0 # A regularização NÃO deve ser aplicada ao intercepto
+
+# Matriz para armazenar os resultados dos coeficientes
+coefs_ridge <- matrix(0, nrow = length(lambdas), ncol = 3)
+colnames(coefs_ridge) <- c("Intercepto", "beta_1", "beta_2")
+
+# Loop para calcular Ridge para cada lambda
+for(i in 1:length(lambdas)) {
+  lambda <- lambdas[i]
+  
+  # Fórmula analítica Ridge: (X^T X + lambda*I)^-1 X^T y
+  beta_r <- solve(t(X_treino) %*% X_treino + lambda * I) %*% t(X_treino) %*% y_treino
+  coefs_ridge[i, ] <- t(beta_r)
+}
+
+print("=== Coeficientes Ridge por Lambda ===")
+```
+
+    ## [1] "=== Coeficientes Ridge por Lambda ==="
+
+``` r
+print(cbind(Lambda = lambdas, coefs_ridge))
+```
+
+    ##      Lambda Intercepto    beta_1   beta_2
+    ## [1,]  0.000   2.856186 0.4047597 1.618162
+    ## [2,]  0.001   2.856189 0.4095282 1.613382
+    ## [3,]  0.010   2.856217 0.4492884 1.573520
+    ## [4,]  0.100   2.856361 0.6726104 1.349236
+
+``` r
+# Gráfico: O caminho dos coeficientes
+# Plotando apenas beta_1 e beta_2 para ver a contração (ignorando o intercepto no gráfico)
+matplot(lambdas, coefs_ridge[, 2:3], type = "b", pch = 19, lwd = 2,
+        xlab = "Valor de Lambda (Penalização)", 
+        ylab = "Valor dos Coeficientes",
+        main = "Caminho dos Coeficientes - Ridge Regression",
+        col = c("darkred", "darkblue"), lty = 1)
+legend("topright", legend = c("beta_1", "beta_2"), col = c("darkred", "darkblue"), lty = 1, pch = 19)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+# Seção 3: Regimen n \< p e Validação Cruzada
+
+Aqui exploramos o cenário em que o número de variáveis preditoras ($p$)
+é maior que o número de observações ($n$). Neste caso, a matriz
+$X^{\top}X$ é singular e o OLS falha.
+
+## (c) Falha do OLS e Validação Cruzada (K-Fold) para Ridge
+
+``` r
+# Carregando dados da seção 3
+dados3 <- read.csv("secao3.csv")
+n3 <- nrow(dados3)
+
+# Temos 20 variáveis + 1 intercepto = 21 colunas. O número de linhas (n3) será menor que isso.
+X_3 <- as.matrix(cbind(1, dados3[, 1:20])) 
+y_3 <- as.matrix(dados3$y)
+
+# Tentando calcular OLS (Isso geraria um erro de sistema "system is computationally singular")
+# Para o R Markdown não travar, vamos calcular o determinante (ou condicional) para provar a falha.
+# Como o determinante de X^T X é praticamente zero, a matriz não é invertível.
+det_XTX <- det(t(X_3) %*% X_3)
+cat("Determinante de X^T X (OLS):", det_XTX, "-> Próximo de zero, logo, não invertível.\n\n")
+```
+
+    ## Determinante de X^T X (OLS): 2.769543e-137 -> Próximo de zero, logo, não invertível.
+
+``` r
+# --- Validação Cruzada (K-Fold = 4) ---
+set.seed(123)
+K <- 4
+lambdas_grid <- c(1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100)
+I_3 <- diag(ncol(X_3))
+I_3[1, 1] <- 0 # Sem penalizar o intercepto
+
+# Embaralhando e dividindo os dados em K folds
+indices <- sample(rep(1:K, length.out = n3))
+
+# Vetor para guardar o MSE médio de cada lambda
+mse_cv_medio <- numeric(length(lambdas_grid))
+
+for (j in 1:length(lambdas_grid)) {
+  lambda <- lambdas_grid[j]
+  mse_k <- numeric(K)
+  
+  for (k in 1:K) {
+    # Separando treino e validação do Fold atual
+    idx_val <- which(indices == k)
+    X_tr <- X_3[-idx_val, ]
+    y_tr <- y_3[-idx_val]
+    X_val <- X_3[idx_val, , drop=FALSE]
+    y_val <- y_3[idx_val]
+    
+    # Treinando Ridge no Fold
+    beta_k <- solve(t(X_tr) %*% X_tr + lambda * I_3) %*% t(X_tr) %*% y_tr
+    
+    # Prevendo na Validação
+    y_pred_val <- X_val %*% beta_k
+    mse_k[k] <- mean((y_val - y_pred_val)^2)
+  }
+  # MSE médio para o lambda atual
+  mse_cv_medio[j] <- mean(mse_k)
+}
+
+# Identificando o lambda estrela (que minimizou o MSE)
+lambda_star <- lambdas_grid[which.min(mse_cv_medio)]
+
+cat("=== Validação Cruzada ===\n")
+```
+
+    ## === Validação Cruzada ===
+
+``` r
+cat("Melhor Lambda (lambda*):", lambda_star, "\n\n")
+```
+
+    ## Melhor Lambda (lambda*): 100
+
+``` r
+# Gráfico do MSE em função de Lambda (escala logarítmica para visualização)
+plot(log10(lambdas_grid), mse_cv_medio, type = "b", pch = 19, col = "darkgreen",
+     xlab = "log10(Lambda)", ylab = "MSE Médio de Validação",
+     main = "Seleção de Hiperparâmetro (Cross-Validation)")
+abline(v = log10(lambda_star), col = "red", lty = 2) # Linha marcando o melhor lambda
+```
+
+![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+
+## (d) Reajuste do Modelo Final com Lambda\*
+
+``` r
+# Reajustando o modelo usando TODOS os dados com o lambda escolhido
+beta_final <- solve(t(X_3) %*% X_3 + lambda_star * I_3) %*% t(X_3) %*% y_3
+
+# Previsões e Resíduos Finais
+y_hat_final <- X_3 %*% beta_final
+residuos_final <- y_3 - y_hat_final
+
+# Métricas Finais
+mse_final <- mean(residuos_final^2)
+mae_final <- mean(abs(residuos_final))
+r2_final <- 1 - (sum(residuos_final^2) / sum((y_3 - mean(y_3))^2))
+
+# Tabela Final
+cat("=== Métricas do Modelo Final (com lambda*) ===\n")
+```
+
+    ## === Métricas do Modelo Final (com lambda*) ===
+
+``` r
+tabela_final <- data.frame(Metrica = c("MSE", "MAE", "R2"), Valor = c(mse_final, mae_final, r2_final))
+print(tabela_final)
+```
+
+    ##   Metrica     Valor
+    ## 1     MSE 5.6617469
+    ## 2     MAE 2.0135408
+    ## 3      R2 0.1516996
